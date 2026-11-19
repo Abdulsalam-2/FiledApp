@@ -3,1302 +3,1120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>FieldGIS Pro - جمع البيانات الميدانية</title>
-
-    <!-- Tailwind CSS CDN -->
+    <meta name="theme-color" content="#0f172a">
+    <title>FieldGIS Pro | نظام الرصد والتوثيق الميداني</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Leaflet.js CSS & JS CDN -->
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Google Fonts (Cairo for Arabic & Inter for English) -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js for rendering PDF letterhead background -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
+
+    <!-- Google Fonts: Tajawal -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 
     <style>
         body {
-            font-family: 'Cairo', 'Inter', sans-serif;
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f8fafc;
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
         }
-        html[dir="ltr"] body {
-            font-family: 'Inter', 'Cairo', sans-serif;
-        }
-        .leaflet-container {
-            z-index: 10 !important;
-            font-family: inherit !important;
-        }
+        
         /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+        /* Signature Canvas */
+        #signatureCanvas {
+            touch-action: none;
+            cursor: crosshair;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        .tab-active {
-            color: #0284c7;
-        }
-        .tab-active svg {
-            stroke: #0284c7;
-            transform: translateY(-2px);
+
+        /* Print / PDF Styling */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-page {
+                page-break-after: always;
+                position: relative;
+                width: 210mm;
+                min-height: 297mm;
+                box-sizing: border-box;
+                overflow: hidden;
+            }
+            .print-page:last-child {
+                page-break-after: auto;
+            }
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 pb-20 select-none">
+<body class="text-slate-800 pb-20 select-none">
 
-    <!-- Top Header -->
-    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center font-bold text-white shadow">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
+    <!-- Top App Bar -->
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md no-print">
+        <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="bg-emerald-500 p-2 rounded-xl shadow-inner">
+                    <i data-lucide="map-pin" class="w-5 h-5 text-slate-950"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">FieldGIS Pro</h1>
+                    <p class="text-[11px] text-slate-400 flex items-center gap-1">
+                        <span id="online-dot" class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                        <span id="online-status">جاهز للرصد الميداني (Offline-Ready)</span>
+                    </p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-base font-bold leading-tight" data-i18n="appTitle">FieldGIS الميداني</h1>
-                <p class="text-[11px] text-slate-400 flex items-center gap-1">
-                    <span id="offline-dot" class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
-                    <span id="offline-status" data-i18n="statusReady">جاهز للعمل الميداني</span>
-                </p>
+            <div class="flex items-center gap-2">
+                <span id="records-badge" class="bg-slate-800 text-emerald-400 text-xs font-bold px-2.5 py-1 rounded-full border border-slate-700">
+                    0 سجل
+                </span>
             </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <button id="install-pwa-btn" class="hidden bg-sky-600 hover:bg-sky-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-semibold shadow transition">
-                <span data-i18n="installApp">تثبيت</span>
-            </button>
-            <button onclick="toggleLanguage()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs px-3 py-1.5 rounded-lg font-semibold transition">
-                <span id="lang-label">EN</span>
-            </button>
         </div>
     </header>
 
     <!-- Main Content Container -->
-    <main class="max-w-lg mx-auto p-4">
+    <main class="max-w-3xl mx-auto px-4 pt-4 no-print">
 
-        <!-- VIEW 1: FIELD FORM (النموذج الميداني) -->
-        <section id="view-form" class="space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
-                <div>
-                    <h2 class="font-bold text-slate-800 text-base" id="active-form-title">نموذج التفتيش الميداني</h2>
-                    <p class="text-xs text-slate-500" data-i18n="formSubtitle">أدخل البيانات والتقط الصور وإحداثيات الموقع</p>
+        <!-- TAB 1: NEW RECORD FORM -->
+        <section id="tab-form" class="space-y-4">
+            
+            <!-- GPS Card -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="navigation" class="w-4 h-4 text-emerald-600"></i>
+                        <h2 class="font-bold text-sm text-slate-800">الإحداثيات الجغرافية (GPS)</h2>
+                    </div>
+                    <button type="button" onclick="captureGPS()" class="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                        <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                        تحديث الموقع
+                    </button>
                 </div>
-                <button onclick="resetFormInputs()" class="text-xs text-rose-600 bg-rose-50 px-3 py-1.5 rounded-lg font-semibold active:scale-95 transition" data-i18n="clearForm">
-                    تفريغ
-                </button>
+                <div class="grid grid-cols-3 gap-2 text-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                        <span class="block text-[10px] text-slate-400">خط العرض (Lat)</span>
+                        <span id="gps-lat" class="font-mono text-xs font-bold text-slate-700">--.------</span>
+                    </div>
+                    <div class="border-x border-slate-200">
+                        <span class="block text-[10px] text-slate-400">خط الطول (Lng)</span>
+                        <span id="gps-lng" class="font-mono text-xs font-bold text-slate-700">--.------</span>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-slate-400">الدقة (Accuracy)</span>
+                        <span id="gps-acc" class="font-mono text-xs font-bold text-emerald-600">-- م</span>
+                    </div>
+                </div>
             </div>
 
-            <form id="dynamic-field-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
-                <div id="form-fields-container" class="space-y-3">
-                    <!-- Dynamic Fields Rendered Here -->
+            <!-- Inspection Details Form -->
+            <form id="inspectionForm" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-4">
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <i data-lucide="clipboard-check" class="w-4 h-4 text-blue-600"></i>
+                    <h2 class="font-bold text-sm text-slate-800">بيانات الزيارة / الفحص الميداني</h2>
                 </div>
 
-                <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 active:scale-[0.99] text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-sky-600/20 flex items-center justify-center gap-2 transition text-base">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    <span data-i18n="saveRecord">حفظ السجل محلياً</span>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">نوع المهمة / النموذج *</label>
+                    <select id="f-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                        <option value="تفتيش مصائد الدهون (مطاعم/منشآت)">تفتيش مصائد الدهون (مطاعم/منشآت)</option>
+                        <option value="فحص شبكات الصرف الصحي والغرف">فحص شبكات الصرف الصحي والغرف</option>
+                        <option value="صيانة محطات المعالجة والرفع">صيانة محطات المعالجة والرفع</option>
+                        <option value="مطابقة سلامة وتصاريح عمل المقاول">مطابقة سلامة وتصاريح عمل المقاول</option>
+                        <option value="رصد بلاغ / مخالفة بيئية">رصد بلاغ / مخالفة بيئية</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">اسم الموقع / المنشأة / العنوان *</label>
+                        <input type="text" id="f-title" required placeholder="مثال: مطعم شواية القريات - حي الفيصلية" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">حالة المطابقة / التقييم *</label>
+                        <select id="f-status" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="مطابق">✅ مطابق للمواصفات</option>
+                            <option value="ملاحظة / إنذار">⚠️ ملاحظة / إنذار</option>
+                            <option value="مخالفة">❌ مخالفة تستوجب الإجراء</option>
+                            <option value="طارئ / حرج">🚨 طارئ / يتطلب تدخل عاجل</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">اسم المهندس / المفتش</label>
+                        <input type="text" id="f-inspector" value="م. عبدالسلام محمد الشراري" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">اسم المستلم / ممثل المقاول (اختياري)</label>
+                        <input type="text" id="f-recipient" placeholder="اسم المستلم أو رقم السجل/الرخصة" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">الوصف الفني والملاحظات الميدانية</label>
+                    <textarea id="f-notes" rows="3" placeholder="اكتب تفاصيل الفحص، القراءات، أو الإجراء المطلوب..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+
+                <!-- Photo & Optional Watermark Section -->
+                <div class="border-t border-slate-100 pt-3 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i data-lucide="camera" class="w-4 h-4 text-purple-600"></i>
+                            التوثيق المصوّر (حتى 4 صور)
+                        </label>
+                        <!-- Optional Watermark Toggle -->
+                        <label class="inline-flex items-center cursor-pointer bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                            <input type="checkbox" id="opt-watermark" checked class="sr-only peer">
+                            <div class="relative w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                            <span class="ms-2 text-[11px] font-bold text-slate-700">ختم مائي تلقائي (GPS/وقت)</span>
+                        </label>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <label class="flex-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 border-dashed rounded-xl py-3 px-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1">
+                            <i data-lucide="camera" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold">التقاط صورة بالكاميرا</span>
+                            <input type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="hidden">
+                        </label>
+                        <label class="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 border-dashed rounded-xl py-3 px-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1">
+                            <i data-lucide="image-plus" class="w-5 h-5"></i>
+                            <span class="text-xs font-bold">اختيار من الاستوديو</span>
+                            <input type="file" accept="image/*" multiple onchange="handlePhotoUpload(event)" class="hidden">
+                        </label>
+                    </div>
+
+                    <!-- Photo Preview Grid -->
+                    <div id="photo-preview-grid" class="grid grid-cols-2 gap-2"></div>
+                </div>
+
+                <!-- Digital Signature Section -->
+                <div class="border-t border-slate-100 pt-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i data-lucide="pen-tool" class="w-4 h-4 text-amber-600"></i>
+                            التوقيع الإلكتروني على الشاشة (اختياري)
+                        </label>
+                        <button type="button" onclick="clearSignature()" class="text-[11px] text-rose-600 font-bold hover:underline">مسح التوقيع</button>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-300 border-dashed rounded-xl overflow-hidden relative">
+                        <canvas id="signatureCanvas" class="w-full h-28 block"></canvas>
+                        <span id="sig-placeholder" class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 pointer-events-none">ارسم التوقيع هنا بالإصبع</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                    <i data-lucide="save" class="w-5 h-5 text-emerald-400"></i>
+                    حفظ السجل الميداني محلياً
                 </button>
             </form>
         </section>
 
-        <!-- VIEW 2: RECORDS LIST (السجلات) -->
-        <section id="view-records" class="hidden space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h2 class="font-bold text-slate-800 text-base" data-i18n="savedRecords">السجلات المحفوظة</h2>
-                        <p class="text-xs text-slate-500"><span data-i18n="totalCount">الإجمالي:</span> <strong id="records-count" class="text-sky-600">0</strong></p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="exportCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1 active:scale-95 transition">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                            </svg>
-                            <span>CSV</span>
-                        </button>
-                        <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1 active:scale-95 transition">
-                            <span>JSON</span>
-                        </button>
-                    </div>
+        <!-- TAB 2: INTERACTIVE MAP -->
+        <section id="tab-map" class="hidden space-y-3">
+            <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-200">
+                <div class="flex items-center justify-between mb-2 px-1">
+                    <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="map" class="w-4 h-4 text-emerald-600"></i>
+                        خريطة المواقع المرصودة
+                    </h2>
+                    <button onclick="centerMapOnUser()" class="text-xs bg-blue-50 text-blue-700 font-bold px-2.5 py-1 rounded-lg">موقعي الحالي</button>
                 </div>
-
-                <!-- Search Input -->
-                <div class="relative">
-                    <input type="text" id="search-records" oninput="renderRecordsList()" placeholder="بحث في السجلات..." data-i18n-placeholder="searchPlaceholder"
-                        class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-sky-500">
-                </div>
-            </div>
-
-            <div id="records-list-container" class="space-y-3">
-                <!-- Records Cards Rendered Here -->
+                <div id="map" class="w-full h-[65vh] rounded-xl z-10 border border-slate-200"></div>
             </div>
         </section>
 
-        <!-- VIEW 3: INTERACTIVE MAP (الخريطة) -->
-        <section id="view-map" class="hidden space-y-3">
-            <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-200 flex items-center justify-between">
-                <div>
-                    <h2 class="font-bold text-slate-800 text-sm" data-i18n="mapTitle">خريطة المواقع المسجلة</h2>
-                    <p class="text-[11px] text-slate-500" data-i18n="mapSubtitle">انقر على أي دبوس لعرض تفاصيل السجل</p>
-                </div>
-                <button onclick="locateUserOnMap()" class="bg-sky-50 text-sky-700 border border-sky-200 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span data-i18n="myLocation">موقعي</span>
-                </button>
-            </div>
-
-            <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
-                <div id="map" class="w-full h-[62vh] rounded-xl"></div>
-            </div>
-        </section>
-
-        <!-- VIEW 4: SETTINGS & FORM BUILDER (الإعدادات ومنشئ النماذج) -->
-        <section id="view-settings" class="hidden space-y-4">
+        <!-- TAB 3: RECORDS & SELECTIVE PDF EXPORT -->
+        <section id="tab-records" class="hidden space-y-4">
             
-            <!-- Form Name Editor -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-                <h2 class="font-bold text-slate-800 text-base border-b pb-2" data-i18n="formBuilderTitle">منشئ النماذج المخصصة (Form Builder)</h2>
-                <div>
-                    <label class="block text-xs font-bold text-slate-600 mb-1" data-i18n="formNameLabel">عنوان النموذج الميداني</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="setting-form-title" class="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
-                        <button onclick="updateFormTitle()" class="bg-sky-600 text-white text-xs font-bold px-4 rounded-xl active:scale-95 transition" data-i18n="save">حفظ</button>
+            <!-- Action Toolbar -->
+            <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="select-all-records" onchange="toggleSelectAll(this)" class="w-4 h-4 rounded text-emerald-600 focus:ring-0">
+                        <label for="select-all-records" class="text-xs font-bold text-slate-700 cursor-pointer">تحديد الكل</label>
+                        <span id="selected-count" class="text-xs bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-md">0 محدد</span>
                     </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="exportSelectedPDF()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                            مشاركة / تصدير PDF للمحدد
+                        </button>
+                        <button onclick="exportCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition">
+                            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                            Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search & Filter -->
+                <div class="flex gap-2">
+                    <input type="text" id="search-input" oninput="renderRecords()" placeholder="بحث باسم الموقع، الفئة، أو الملاحظات..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500">
+                    <select id="filter-status" onchange="renderRecords()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs focus:outline-none">
+                        <option value="ALL">كل الحالات</option>
+                        <option value="مطابق">مطابق</option>
+                        <option value="ملاحظة / إنذار">ملاحظة / إنذار</option>
+                        <option value="مخالفة">مخالفة</option>
+                        <option value="طارئ / حرج">طارئ / حرج</option>
+                    </select>
                 </div>
             </div>
 
-            <!-- Add New Field Box -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-                <h3 class="font-bold text-slate-800 text-sm" data-i18n="addNewField">إضافة حقل جديد للنموذج</h3>
-                
-                <div class="grid grid-cols-1 gap-3">
+            <!-- Records List Container -->
+            <div id="records-list" class="space-y-3"></div>
+        </section>
+
+        <!-- TAB 4: REPORT TEMPLATE SETTINGS (LETTERHEAD & MARGINS) & BACKUP -->
+        <section id="tab-settings" class="hidden space-y-4">
+            
+            <!-- Letterhead / Background Upload Card -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                    <i data-lucide="layout-template" class="w-5 h-5 text-indigo-600"></i>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="fieldLabel">اسم الحقل (Label)</label>
-                        <input type="text" id="new-field-label" placeholder="مثال: اسم المنشأة / رقم الغرفة" data-i18n-placeholder="fieldLabelPlaceholder"
-                            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
+                        <h2 class="font-bold text-sm text-slate-800">قالب التقرير الرسمي (الخلفية والترويسة والتذييل)</h2>
+                        <p class="text-[11px] text-slate-500">ارفع الكليشة الرسمية (PDF أو صورة من الوورد) واضبط هوامش الكتابة</p>
+                    </div>
+                </div>
+
+                <!-- Upload Template File -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-700">1. رفع ملف الخلفية / الكليشة (PDF أو صورة PNG/JPG)</label>
+                    <p class="text-[11px] text-slate-500 leading-relaxed">
+                        * ملاحظة: إذا كان لديك قالب Word (.docx)، احفظه من الوورد بصيغة <b>PDF</b> أو صورة <b>PNG</b> ثم ارفعه هنا ليتم تطبيقه كخلفية كاملة A4 لكل صفحات التقرير.
+                    </p>
+                    <div class="flex items-center gap-2">
+                        <label class="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 border-dashed rounded-xl py-3 px-4 text-center cursor-pointer transition flex items-center justify-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                            <span class="text-xs font-bold">اختر ملف الكليشة (PDF أو صورة)</span>
+                            <input type="file" id="template-file-input" accept="application/pdf,image/*" onchange="handleTemplateUpload(event)" class="hidden">
+                        </label>
+                        <button type="button" onclick="removeTemplateBg()" class="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-3 rounded-xl text-xs font-bold border border-rose-200">
+                            حذف الخلفية
+                        </button>
+                    </div>
+                    <div id="template-status" class="text-xs text-emerald-700 font-bold hidden bg-emerald-50 p-2 rounded-lg border border-emerald-200"></div>
+                </div>
+
+                <!-- Header & Footer Margin Alignment -->
+                <div class="space-y-3 border-t border-slate-100 pt-3">
+                    <label class="block text-xs font-bold text-slate-700">2. محاذاة منطقة الطباعة (تجنب تداخل النص مع الترويسة والتذييل)</label>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div class="flex justify-between text-xs font-bold mb-1">
+                                <span>هامش الترويسة العلوي:</span>
+                                <span id="val-margin-top" class="text-indigo-600">35 مم</span>
+                            </div>
+                            <input type="range" id="cfg-margin-top" min="10" max="90" value="35" oninput="updateMarginUI()" class="w-full accent-indigo-600">
+                        </div>
+
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div class="flex justify-between text-xs font-bold mb-1">
+                                <span>هامش التذييل السفلي:</span>
+                                <span id="val-margin-bottom" class="text-indigo-600">25 مم</span>
+                            </div>
+                            <input type="range" id="cfg-margin-bottom" min="10" max="80" value="25" oninput="updateMarginUI()" class="w-full accent-indigo-600">
+                        </div>
+
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div class="flex justify-between text-xs font-bold mb-1">
+                                <span>الهامش الأيمن:</span>
+                                <span id="val-margin-right" class="text-indigo-600">15 مم</span>
+                            </div>
+                            <input type="range" id="cfg-margin-right" min="5" max="40" value="15" oninput="updateMarginUI()" class="w-full accent-indigo-600">
+                        </div>
+
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div class="flex justify-between text-xs font-bold mb-1">
+                                <span>الهامش الأيسر:</span>
+                                <span id="val-margin-left" class="text-indigo-600">15 مم</span>
+                            </div>
+                            <input type="range" id="cfg-margin-left" min="5" max="40" value="15" oninput="updateMarginUI()" class="w-full accent-indigo-600">
+                        </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    <!-- Custom Text Header/Footer (Used if no background image or alongside it) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="fieldType">نوع الحقل</label>
-                            <select id="new-field-type" onchange="toggleSelectOptionsInput()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
-                                <option value="text" data-i18n="typeText">نص (Text)</option>
-                                <option value="number" data-i18n="typeNumber">رقم (Number)</option>
-                                <option value="select" data-i18n="typeSelect">قائمة منسدلة (Select)</option>
-                                <option value="boolean" data-i18n="typeBoolean">نعم / لا (Yes/No)</option>
-                                <option value="date" data-i18n="typeDate">تاريخ (Date)</option>
-                                <option value="gps" data-i18n="typeGps">إحداثيات GPS</option>
-                                <option value="photo" data-i18n="typePhoto">صورة كاميرا (Photo)</option>
-                            </select>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">نص ترويسة إضافي (اختياري)</label>
+                            <input type="text" id="cfg-header-text" placeholder="مثال: إدارة التشغيل والصيانة - الخدمات البيئية بالقريات" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
                         </div>
-
-                        <div class="flex items-end pb-2">
-                            <label class="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-700">
-                                <input type="checkbox" id="new-field-required" class="w-4 h-4 rounded text-sky-600">
-                                <span data-i18n="requiredField">حقل إلزامي</span>
-                            </label>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-600 mb-1">نص تذييل إضافي (اختياري)</label>
+                            <input type="text" id="cfg-footer-text" placeholder="مثال: تقرير فني معتمد - نظام الرصد الميداني" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
                         </div>
                     </div>
 
-                    <div id="select-options-wrapper" class="hidden">
-                        <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="selectOptionsLabel">خيارات القائمة (افصل بينها بفاصلة ,)</label>
-                        <input type="text" id="new-field-options" placeholder="مطابق, غير مطابق, يحتاج صيانة" data-i18n-placeholder="selectOptionsPlaceholder"
-                            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
+                    <!-- Live Visual Alignment Preview -->
+                    <div class="pt-2">
+                        <span class="block text-[11px] font-bold text-slate-600 mb-1.5">معاينة حية لمحاذاة الصفحة (A4):</span>
+                        <div class="w-48 h-64 mx-auto border-2 border-slate-300 rounded-lg relative overflow-hidden bg-white shadow-inner" id="a4-preview-box">
+                            <img id="a4-preview-img" class="absolute inset-0 w-full h-full object-fill hidden" />
+                            <div id="a4-safe-zone" class="absolute border-2 border-dashed border-indigo-500 bg-indigo-500/10 flex items-center justify-center text-[9px] font-bold text-indigo-800 text-center p-1" style="top: 11.8%; bottom: 8.4%; right: 7.1%; left: 7.1%;">
+                                منطقة محتوى التقرير والصور
+                            </div>
+                        </div>
                     </div>
 
-                    <button onclick="addCustomField()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-sm transition active:scale-95" data-i18n="addFieldBtn">
-                        + إضافة الحقل إلى النموذج
+                    <button type="button" onclick="saveTemplateSettings()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow transition">
+                        حفظ إعدادات القالب والمحاذاة
                     </button>
                 </div>
             </div>
 
-            <!-- Current Fields List -->
+            <!-- Backup & Restore Card -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-                <div class="flex items-center justify-between border-b pb-2">
-                    <h3 class="font-bold text-slate-800 text-sm" data-i18n="currentFields">حقول النموذج الحالية</h3>
-                    <button onclick="restoreDefaultTemplate()" class="text-xs text-sky-600 font-semibold hover:underline" data-i18n="restoreDefault">استعادة القالب الافتراضي</button>
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <i data-lucide="database-backup" class="w-5 h-5 text-slate-700"></i>
+                    <h2 class="font-bold text-sm text-slate-800">النسخ الاحتياطي واستعادة البيانات (JSON)</h2>
                 </div>
-                <div id="schema-fields-list" class="space-y-2">
-                    <!-- Schema Fields Rendered Here -->
-                </div>
-            </div>
-
-            <!-- Backup & Restore -->
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
-                <h3 class="font-bold text-slate-800 text-sm border-b pb-2" data-i18n="backupTitle">النسخ الاحتياطي وإدارة البيانات</h3>
+                <p class="text-xs text-slate-500">احفظ نسخة احتياطية كاملة من سجلاتك وصورك على جوالك لحمايتها من مسح بيانات المتصفح.</p>
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="exportJSON()" class="bg-sky-50 text-sky-700 border border-sky-200 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1 active:scale-95 transition">
-                        <span data-i18n="backupExport">تصدير نسخة JSON</span>
+                    <button type="button" onclick="downloadBackup()" class="bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        تصدير نسخة احتياطية
                     </button>
-                    <label class="bg-amber-50 text-amber-700 border border-amber-200 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition">
-                        <span data-i18n="backupImport">استعادة نسخة JSON</span>
-                        <input type="file" accept=".json" onchange="importJSON(event)" class="hidden">
+                    <label class="bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        استعادة نسخة
+                        <input type="file" accept=".json" onchange="restoreBackup(event)" class="hidden">
                     </label>
                 </div>
-                <button onclick="clearAllRecords()" class="w-full bg-rose-50 text-rose-600 border border-rose-200 font-bold py-2.5 rounded-xl text-xs active:scale-95 transition" data-i18n="deleteAllRecords">
-                    حذف جميع السجلات المحفوظة نهائياً
-                </button>
             </div>
         </section>
 
     </main>
 
-    <!-- Record Details Modal -->
-    <div id="record-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-slide-up">
-            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <h3 class="font-bold text-slate-800 text-base" data-i18n="recordDetails">تفاصيل السجل الميداني</h3>
-                <button onclick="closeRecordModal()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold">✕</button>
-            </div>
-            <div id="record-modal-body" class="p-5 overflow-y-auto space-y-3 text-sm">
-                <!-- Modal Content -->
-            </div>
-            <div class="p-4 border-t border-slate-200 bg-slate-50 flex gap-2">
-                <button id="modal-delete-btn" class="flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs" data-i18n="deleteRecord">حذف السجل</button>
-                <button onclick="closeRecordModal()" class="flex-1 bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs" data-i18n="close">إغلاق</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
-    </div>
-
-    <!-- Fixed Bottom Navigation Bar (Mobile-First) -->
-    <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
-        <div class="max-w-lg mx-auto grid grid-cols-4 h-16">
-            <button onclick="switchTab('form')" id="nav-form" class="tab-active flex flex-col items-center justify-center gap-1 text-slate-500 transition">
-                <svg class="w-6 h-6 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                <span class="text-[11px] font-bold" data-i18n="navForm">النموذج</span>
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-40 no-print shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+        <div class="max-w-3xl mx-auto grid grid-cols-4 h-16">
+            <button onclick="switchTab('form')" id="nav-form" class="flex flex-col items-center justify-center gap-1 text-emerald-600 font-bold">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                <span class="text-[11px]">رصد جديد</span>
             </button>
-
-            <button onclick="switchTab('records')" id="nav-records" class="flex flex-col items-center justify-center gap-1 text-slate-500 transition relative">
-                <svg class="w-6 h-6 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                </svg>
-                <span class="text-[11px] font-bold" data-i18n="navRecords">السجلات</span>
-                <span id="nav-badge" class="hidden absolute top-2 right-6 bg-sky-600 text-white text-[9px] font-bold px-1.5 rounded-full">0</span>
+            <button onclick="switchTab('map')" id="nav-map" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600">
+                <i data-lucide="map" class="w-5 h-5"></i>
+                <span class="text-[11px]">الخريطة</span>
             </button>
-
-            <button onclick="switchTab('map')" id="nav-map" class="flex flex-col items-center justify-center gap-1 text-slate-500 transition">
-                <svg class="w-6 h-6 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
-                </svg>
-                <span class="text-[11px] font-bold" data-i18n="navMap">الخريطة</span>
+            <button onclick="switchTab('records')" id="nav-records" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600">
+                <i data-lucide="folder-check" class="w-5 h-5"></i>
+                <span class="text-[11px]">السجلات وPDF</span>
             </button>
-
-            <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center justify-center gap-1 text-slate-500 transition">
-                <svg class="w-6 h-6 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <span class="text-[11px] font-bold" data-i18n="navSettings">الإعدادات</span>
+            <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600">
+                <i data-lucide="sliders" class="w-5 h-5"></i>
+                <span class="text-[11px]">قالب التقرير</span>
             </button>
         </div>
     </nav>
 
+    <!-- Hidden Print / PDF Export Container -->
+    <div id="print-area"></div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl z-50 transition-all duration-300 opacity-0 pointer-events-none">
+        تم الحفظ بنجاح
+    </div>
+
     <script>
-        /* ==========================================================================
-           1. PWA MANIFEST & SERVICE WORKER (BLOB URL OFFLINE-FIRST ENGINE)
-           ========================================================================== */
-        (function initPWA() {
-            const manifestObj = {
-                name: "FieldGIS Pro - Field Data Collection",
-                short_name: "FieldGIS",
-                start_url: ".",
-                display: "standalone",
-                background_color: "#f1f5f9",
-                theme_color: "#0f172a",
-                description: "Offline-First Mobile Field Data Collection & GIS Mapping PWA",
-                icons: [{
-                    src: "data:image/svg+xml;base64," + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0284c7"/><path d="M50 20c-13.8 0-25 11.2-25 25 0 18.8 25 35 25 35s25-16.2 25-35c0-13.8-11.2-25-25-25zm0 34c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9z" fill="#ffffff"/></svg>'),
-                    sizes: "192x192",
-                    type: "image/svg+xml"
-                }]
-            };
-            const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
-            const manifestURL = URL.createObjectURL(manifestBlob);
-            const link = document.createElement('link');
-            link.rel = 'manifest';
-            link.href = manifestURL;
-            document.head.appendChild(link);
+        // --- 1. INITIALIZATION & INDEXEDDB ---
+        lucide.createIcons();
+        const DB_NAME = 'FieldGIS_Pro_DB';
+        const DB_VERSION = 1;
+        let db;
+        let currentGPS = { lat: null, lng: null, acc: null };
+        let currentPhotos = [];
+        let allRecords = [];
+        let selectedIds = new Set();
+        let map = null;
+        let markersLayer = null;
 
-            if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-                const swCode = `
-                    const CACHE_NAME = 'fieldgis-offline-v1';
-                    const ASSETS = [
-                        './',
-                        'https://cdn.tailwindcss.com',
-                        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-                        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-                    ];
-                    self.addEventListener('install', e => {
-                        e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS).catch(() => {})));
-                        self.skipWaiting();
-                    });
-                    self.addEventListener('activate', e => {
-                        e.waitUntil(self.clients.claim());
-                    });
-                    self.addEventListener('fetch', e => {
-                        e.respondWith(
-                            caches.match(e.request).then(cached => {
-                                return cached || fetch(e.request).then(response => {
-                                    if (e.request.method === 'GET' && response.status === 200) {
-                                        const clone = response.clone();
-                                        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-                                    }
-                                    return response;
-                                }).catch(() => cached);
-                            })
-                        );
-                    });
-                `;
-                const swBlob = new Blob([swCode], { type: 'application/javascript' });
-                const swURL = URL.createObjectURL(swBlob);
-                navigator.serviceWorker.register(swURL).catch(() => {});
-            }
-
-            let deferredPrompt;
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                const btn = document.getElementById('install-pwa-btn');
-                btn.classList.remove('hidden');
-                btn.onclick = async () => {
-                    deferredPrompt.prompt();
-                    await deferredPrompt.userChoice;
-                    btn.classList.add('hidden');
-                    deferredPrompt = null;
-                };
-            });
-        })();
-
-        /* ==========================================================================
-           2. INTERNATIONALIZATION (ARABIC RTL & ENGLISH LTR)
-           ========================================================================== */
-        let currentLang = localStorage.getItem('fieldgis_lang') || 'ar';
-
-        const i18n = {
-            ar: {
-                appTitle: "FieldGIS الميداني",
-                statusReady: "جاهز للعمل (تخزين محلي)",
-                statusOffline: "وضع عدم الاتصال (Offline)",
-                installApp: "تثبيت",
-                formSubtitle: "أدخل البيانات والتقط الصور وإحداثيات الموقع",
-                clearForm: "تفريغ",
-                saveRecord: "حفظ السجل محلياً",
-                savedRecords: "السجلات المحفوظة",
-                totalCount: "الإجمالي:",
-                searchPlaceholder: "بحث في السجلات...",
-                mapTitle: "خريطة المواقع المسجلة",
-                mapSubtitle: "انقر على أي دبوس لعرض تفاصيل السجل",
-                myLocation: "موقعي",
-                formBuilderTitle: "منشئ النماذج المخصصة (Form Builder)",
-                formNameLabel: "عنوان النموذج الميداني",
-                save: "حفظ",
-                addNewField: "إضافة حقل جديد للنموذج",
-                fieldLabel: "اسم الحقل (Label)",
-                fieldLabelPlaceholder: "مثال: اسم المنشأة / رقم الغرفة",
-                fieldType: "نوع الحقل",
-                typeText: "نص (Text)",
-                typeNumber: "رقم (Number)",
-                typeSelect: "قائمة منسدلة (Select)",
-                typeBoolean: "نعم / لا (Yes/No)",
-                typeDate: "تاريخ (Date)",
-                typeGps: "إحداثيات GPS",
-                typePhoto: "صورة كاميرا (Photo)",
-                requiredField: "حقل إلزامي",
-                selectOptionsLabel: "خيارات القائمة (افصل بينها بفاصلة ,)",
-                selectOptionsPlaceholder: "مطابق, غير مطابق, يحتاج صيانة",
-                addFieldBtn: "+ إضافة الحقل إلى النموذج",
-                currentFields: "حقول النموذج الحالية",
-                restoreDefault: "استعادة الافتراضي",
-                backupTitle: "النسخ الاحتياطي وإدارة البيانات",
-                backupExport: "تصدير نسخة JSON",
-                backupImport: "استعادة نسخة JSON",
-                deleteAllRecords: "حذف جميع السجلات المحفوظة نهائياً",
-                recordDetails: "تفاصيل السجل الميداني",
-                deleteRecord: "حذف السجل",
-                close: "إغلاق",
-                navForm: "النموذج",
-                navRecords: "السجلات",
-                navMap: "الخريطة",
-                navSettings: "الإعدادات",
-                captureGps: "تحديث الموقع GPS",
-                locating: "جاري تحديد الموقع...",
-                gpsSuccess: "تم التقاط الإحداثيات بنجاح",
-                gpsError: "تعذر تحديد الموقع، تأكد من تفعيل GPS",
-                takePhoto: "التقاط صورة من الكاميرا",
-                photoCaptured: "تم إرفاق الصورة",
-                yes: "نعم",
-                no: "لا",
-                chooseOption: "-- اختر --",
-                toastSaved: "تم حفظ السجل في قاعدة البيانات المحلية بنجاح",
-                toastDeleted: "تم حذف السجل",
-                toastFieldAdded: "تمت إضافة الحقل بنجاح",
-                toastEmptyRecords: "لا توجد سجلات محفوظة حالياً",
-                confirmDeleteAll: "هل أنت متأكد من حذف جميع السجلات والصور نهائياً؟",
-                confirmRestore: "سيتم استبدال حقول النموذج الحالية بالقالب الافتراضي، هل تريد المتابعة؟",
-                viewDetails: "التفاصيل"
-            },
-            en: {
-                appTitle: "FieldGIS Mobile",
-                statusReady: "Ready (Local Storage)",
-                statusOffline: "Offline Mode Active",
-                installApp: "Install",
-                formSubtitle: "Collect field attributes, photos & GPS coordinates",
-                clearForm: "Clear",
-                saveRecord: "Save Record Locally",
-                savedRecords: "Saved Field Records",
-                totalCount: "Total:",
-                searchPlaceholder: "Search records...",
-                mapTitle: "Field Assets & Records Map",
-                mapSubtitle: "Tap any marker to inspect record details",
-                myLocation: "My GPS",
-                formBuilderTitle: "Custom Form Builder",
-                formNameLabel: "Form Title",
-                save: "Save",
-                addNewField: "Add New Field",
-                fieldLabel: "Field Label",
-                fieldLabelPlaceholder: "e.g. Facility Name / Manhole ID",
-                fieldType: "Field Type",
-                typeText: "Text",
-                typeNumber: "Number",
-                typeSelect: "Dropdown (Select)",
-                typeBoolean: "Yes / No",
-                typeDate: "Date",
-                typeGps: "GPS Coordinates",
-                typePhoto: "Camera Photo",
-                requiredField: "Required Field",
-                selectOptionsLabel: "Options (comma separated ,)",
-                selectOptionsPlaceholder: "Compliant, Non-Compliant, Maintenance Needed",
-                addFieldBtn: "+ Add Field to Form",
-                currentFields: "Current Form Fields",
-                restoreDefault: "Restore Default",
-                backupTitle: "Backup & Data Management",
-                backupExport: "Export JSON Backup",
-                backupImport: "Restore JSON Backup",
-                deleteAllRecords: "Delete All Saved Records",
-                recordDetails: "Field Record Details",
-                deleteRecord: "Delete Record",
-                close: "Close",
-                navForm: "Form",
-                navRecords: "Records",
-                navMap: "Map",
-                navSettings: "Settings",
-                captureGps: "Refresh GPS",
-                locating: "Acquiring GPS...",
-                gpsSuccess: "GPS coordinates captured",
-                gpsError: "Unable to acquire GPS. Enable location services.",
-                takePhoto: "Capture Photo with Camera",
-                photoCaptured: "Photo Attached",
-                yes: "Yes",
-                no: "No",
-                chooseOption: "-- Select --",
-                toastSaved: "Record saved locally in IndexedDB",
-                toastDeleted: "Record deleted",
-                toastFieldAdded: "Field added to form",
-                toastEmptyRecords: "No records saved yet",
-                confirmDeleteAll: "Are you sure you want to permanently delete all records and photos?",
-                confirmRestore: "Replace current fields with default inspection template?",
-                viewDetails: "Details"
-            }
+        // Default Template Settings
+        let templateConfig = {
+            bgDataUrl: null,
+            marginTop: 35,
+            marginBottom: 25,
+            marginRight: 15,
+            marginLeft: 15,
+            headerText: '',
+            footerText: ''
         };
 
-        function applyLanguage() {
-            const dict = i18n[currentLang];
-            document.documentElement.lang = currentLang;
-            document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
-            document.getElementById('lang-label').textContent = currentLang === 'ar' ? 'EN' : 'عربي';
-
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const key = el.getAttribute('data-i18n');
-                if (dict[key]) el.textContent = dict[key];
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains('records')) {
+                        database.createObjectStore('records', { keyPath: 'id' });
+                    }
+                    if (!database.objectStoreNames.contains('settings')) {
+                        database.createObjectStore('settings', { keyPath: 'key' });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onerror = (e) => reject(e);
             });
-
-            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-                const key = el.getAttribute('data-i18n-placeholder');
-                if (dict[key]) el.placeholder = dict[key];
-            });
-
-            updateNetworkStatus();
         }
 
-        function toggleLanguage() {
-            currentLang = currentLang === 'ar' ? 'en' : 'ar';
-            localStorage.setItem('fieldgis_lang', currentLang);
-            applyLanguage();
-            renderDynamicForm();
-            renderSchemaList();
-            renderRecordsList();
-        }
+        async function loadAllData() {
+            await initDB();
+            // Load Settings
+            const txSet = db.transaction('settings', 'readonly');
+            const storeSet = txSet.objectStore('settings');
+            const reqSet = storeSet.get('templateConfig');
+            reqSet.onsuccess = () => {
+                if (reqSet.result) {
+                    templateConfig = { ...templateConfig, ...reqSet.result.value };
+                }
+                applyTemplateSettingsToUI();
+            };
 
-        function updateNetworkStatus() {
-            const dot = document.getElementById('offline-dot');
-            const text = document.getElementById('offline-status');
-            if (navigator.onLine) {
-                dot.className = "w-2 h-2 rounded-full bg-emerald-400 inline-block";
-                text.textContent = i18n[currentLang].statusReady;
-            } else {
-                dot.className = "w-2 h-2 rounded-full bg-amber-400 inline-block";
-                text.textContent = i18n[currentLang].statusOffline;
-            }
+            // Load Records
+            const tx = db.transaction('records', 'readonly');
+            const store = tx.objectStore('records');
+            const req = store.getAll();
+            req.onsuccess = () => {
+                allRecords = req.result.sort((a, b) => b.timestamp - a.timestamp);
+                document.getElementById('records-badge').innerText = `${allRecords.length} سجل`;
+                renderRecords();
+            };
         }
-        window.addEventListener('online', updateNetworkStatus);
-        window.addEventListener('offline', updateNetworkStatus);
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
-            toast.textContent = msg;
+            toast.innerText = msg;
             toast.classList.remove('opacity-0');
             setTimeout(() => toast.classList.add('opacity-0'), 2800);
         }
 
-        /* ==========================================================================
-           3. INDEXEDDB STORAGE ENGINE (OFFLINE PERSISTENCE FOR RECORDS & PHOTOS)
-           ========================================================================== */
-        const DB_NAME = 'FieldGIS_DB';
-        const DB_VERSION = 1;
-        const STORE_RECORDS = 'records';
-        let dbInstance = null;
-
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                if (dbInstance) return resolve(dbInstance);
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORE_RECORDS)) {
-                        db.createObjectStore(STORE_RECORDS, { keyPath: 'id' });
-                    }
-                };
-                request.onsuccess = (e) => {
-                    dbInstance = e.target.result;
-                    resolve(dbInstance);
-                };
-                request.onerror = (e) => reject(e.target.error);
-            });
-        }
-
-        async function dbSaveRecord(record) {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE_RECORDS, 'readwrite');
-                tx.objectStore(STORE_RECORDS).put(record);
-                tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject(e.target.error);
-            });
-        }
-
-        async function dbGetAllRecords() {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE_RECORDS, 'readonly');
-                const req = tx.objectStore(STORE_RECORDS).getAll();
-                req.onsuccess = () => {
-                    const sorted = req.result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    resolve(sorted);
-                };
-                req.onerror = (e) => reject(e.target.error);
-            });
-        }
-
-        async function dbDeleteRecord(id) {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE_RECORDS, 'readwrite');
-                tx.objectStore(STORE_RECORDS).delete(id);
-                tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject(e.target.error);
-            });
-        }
-
-        async function dbClearAll() {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE_RECORDS, 'readwrite');
-                tx.objectStore(STORE_RECORDS).clear();
-                tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject(e.target.error);
-            });
-        }
-
-        /* ==========================================================================
-           4. FORM SCHEMA & FORM BUILDER STATE
-           ========================================================================== */
-        const DEFAULT_SCHEMA = {
-            title: "تفتيش المواقع والأصول الميدانية",
-            fields: [
-                { id: "f_site", label: "اسم الموقع / المنشأة", type: "text", required: true },
-                { id: "f_status", label: "حالة المطابقة", type: "select", options: ["مطابق للاشتراطات", "غير مطابق - مخالفة", "يحتاج صيانة عاجلة"], required: true },
-                { id: "f_level", label: "نسبة الامتلاء / القراءة (%)", type: "number", required: false },
-                { id: "f_permit", label: "هل يوجد سجل صيانة ساري؟", type: "boolean", required: false },
-                { id: "f_date", label: "تاريخ الفحص", type: "date", required: true },
-                { id: "f_gps", label: "إحداثيات الموقع (GPS)", type: "gps", required: true },
-                { id: "f_photo", label: "صورة التوثيق الميداني", type: "photo", required: false },
-                { id: "f_notes", label: "ملاحظات المفتش", type: "text", required: false }
-            ]
-        };
-
-        let formSchema = JSON.parse(localStorage.getItem('fieldgis_schema')) || JSON.parse(JSON.stringify(DEFAULT_SCHEMA));
-        let tempPhotos = {}; // Stores compressed base64 images for current form session
-
-        function saveSchema() {
-            localStorage.setItem('fieldgis_schema', JSON.stringify(formSchema));
-            document.getElementById('active-form-title').textContent = formSchema.title;
-            document.getElementById('setting-form-title').value = formSchema.title;
-        }
-
-        function updateFormTitle() {
-            const val = document.getElementById('setting-form-title').value.trim();
-            if (!val) return;
-            formSchema.title = val;
-            saveSchema();
-            showToast(i18n[currentLang].save + " ✓");
-        }
-
-        function toggleSelectOptionsInput() {
-            const type = document.getElementById('new-field-type').value;
-            const wrapper = document.getElementById('select-options-wrapper');
-            wrapper.classList.toggle('hidden', type !== 'select');
-        }
-
-        function addCustomField() {
-            const label = document.getElementById('new-field-label').value.trim();
-            const type = document.getElementById('new-field-type').value;
-            const required = document.getElementById('new-field-required').checked;
-            const optionsRaw = document.getElementById('new-field-options').value;
-
-            if (!label) {
-                document.getElementById('new-field-label').focus();
-                return;
-            }
-
-            const newField = {
-                id: 'f_' + Date.now(),
-                label,
-                type,
-                required
-            };
-
-            if (type === 'select') {
-                newField.options = optionsRaw.split(',').map(s => s.trim()).filter(Boolean);
-                if (newField.options.length === 0) newField.options = ["خيار 1", "خيار 2"];
-            }
-
-            formSchema.fields.push(newField);
-            saveSchema();
-            renderSchemaList();
-            renderDynamicForm();
-
-            document.getElementById('new-field-label').value = '';
-            document.getElementById('new-field-options').value = '';
-            document.getElementById('new-field-required').checked = false;
-            showToast(i18n[currentLang].toastFieldAdded);
-        }
-
-        function deleteSchemaField(index) {
-            formSchema.fields.splice(index, 1);
-            saveSchema();
-            renderSchemaList();
-            renderDynamicForm();
-        }
-
-        function moveSchemaField(index, direction) {
-            const target = index + direction;
-            if (target < 0 || target >= formSchema.fields.length) return;
-            const temp = formSchema.fields[index];
-            formSchema.fields[index] = formSchema.fields[target];
-            formSchema.fields[target] = temp;
-            saveSchema();
-            renderSchemaList();
-            renderDynamicForm();
-        }
-
-        function restoreDefaultTemplate() {
-            if (!confirm(i18n[currentLang].confirmRestore)) return;
-            formSchema = JSON.parse(JSON.stringify(DEFAULT_SCHEMA));
-            saveSchema();
-            renderSchemaList();
-            renderDynamicForm();
-        }
-
-        function renderSchemaList() {
-            const container = document.getElementById('schema-fields-list');
-            container.innerHTML = '';
-
-            formSchema.fields.forEach((field, idx) => {
-                const div = document.createElement('div');
-                div.className = "flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-2.5";
-                div.innerHTML = `
-                    <div class="flex flex-col">
-                        <span class="text-xs font-bold text-slate-800">${field.label} ${field.required ? '<span class="text-rose-500">*</span>' : ''}</span>
-                        <span class="text-[10px] text-slate-500 uppercase font-mono">${field.type}</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="moveSchemaField(${idx}, -1)" class="w-7 h-7 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">↑</button>
-                        <button type="button" onclick="moveSchemaField(${idx}, 1)" class="w-7 h-7 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">↓</button>
-                        <button type="button" onclick="deleteSchemaField(${idx})" class="w-7 h-7 bg-rose-50 border border-rose-200 rounded-lg text-xs font-bold text-rose-600">✕</button>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        /* ==========================================================================
-           5. DYNAMIC FORM RENDERING, CAMERA COMPRESSION & GPS CAPTURE
-           ========================================================================== */
-        function renderDynamicForm() {
-            const container = document.getElementById('form-fields-container');
-            container.innerHTML = '';
-            const today = new Date().toISOString().split('T')[0];
-
-            formSchema.fields.forEach(field => {
-                const card = document.createElement('div');
-                card.className = "bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2";
-
-                const labelHtml = `
-                    <label class="block text-xs font-bold text-slate-700">
-                        ${field.label} ${field.required ? '<span class="text-rose-500">*</span>' : ''}
-                    </label>
-                `;
-
-                let inputHtml = '';
-
-                if (field.type === 'text') {
-                    inputHtml = `<input type="text" name="${field.id}" ${field.required ? 'required' : ''}
-                        class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500">`;
-                } 
-                else if (field.type === 'number') {
-                    inputHtml = `<input type="number" step="any" name="${field.id}" ${field.required ? 'required' : ''}
-                        class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500">`;
-                } 
-                else if (field.type === 'date') {
-                    inputHtml = `<input type="date" name="${field.id}" value="${today}" ${field.required ? 'required' : ''}
-                        class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500">`;
-                } 
-                else if (field.type === 'select') {
-                    const opts = (field.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-                    inputHtml = `
-                        <select name="${field.id}" ${field.required ? 'required' : ''}
-                            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-sky-500">
-                            <option value="">${i18n[currentLang].chooseOption}</option>
-                            ${opts}
-                        </select>`;
-                } 
-                else if (field.type === 'boolean') {
-                    inputHtml = `
-                        <div class="grid grid-cols-2 gap-2 pt-1">
-                            <label class="cursor-pointer">
-                                <input type="radio" name="${field.id}" value="${i18n[currentLang].yes}" ${field.required ? 'required' : ''} class="peer hidden">
-                                <div class="text-center py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600 transition">
-                                    ${i18n[currentLang].yes}
-                                </div>
-                            </label>
-                            <label class="cursor-pointer">
-                                <input type="radio" name="${field.id}" value="${i18n[currentLang].no}" class="peer hidden">
-                                <div class="text-center py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold peer-checked:bg-rose-600 peer-checked:text-white peer-checked:border-rose-600 transition">
-                                    ${i18n[currentLang].no}
-                                </div>
-                            </label>
-                        </div>`;
-                } 
-                else if (field.type === 'gps') {
-                    inputHtml = `
-                        <div class="space-y-2">
-                            <div class="flex gap-2">
-                                <input type="text" id="gps-input-${field.id}" name="${field.id}" readonly placeholder="24.7136, 46.6753" ${field.required ? 'required' : ''}
-                                    class="flex-1 bg-slate-100 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-mono text-slate-700">
-                                <button type="button" onclick="captureFieldGPS('${field.id}')"
-                                    class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold px-3.5 rounded-xl flex items-center gap-1 active:scale-95 transition">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                    </svg>
-                                    <span>GPS</span>
-                                </button>
-                            </div>
-                            <p id="gps-acc-${field.id}" class="text-[11px] text-slate-500"></p>
-                        </div>`;
-                } 
-                else if (field.type === 'photo') {
-                    inputHtml = `
-                        <div class="space-y-2">
-                            <label class="w-full border-2 border-dashed border-sky-300 bg-sky-50/60 hover:bg-sky-50 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition active:scale-[0.99]">
-                                <svg class="w-7 h-7 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                </svg>
-                                <span class="text-xs font-bold text-sky-700">${i18n[currentLang].takePhoto}</span>
-                                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoCapture(event, '${field.id}')" class="hidden">
-                            </label>
-                            <div id="photo-preview-${field.id}" class="hidden relative">
-                                <img id="photo-img-${field.id}" class="w-full h-44 object-cover rounded-xl border border-slate-200 shadow-xs">
-                                <button type="button" onclick="removeTempPhoto('${field.id}')" class="absolute top-2 right-2 bg-rose-600 text-white w-7 h-7 rounded-full text-xs font-bold shadow">✕</button>
-                            </div>
-                        </div>`;
-                }
-
-                card.innerHTML = labelHtml + inputHtml;
-                container.appendChild(card);
-
-                // Auto-capture GPS on load for GPS fields
-                if (field.type === 'gps') {
-                    captureFieldGPS(field.id, true);
-                }
-            });
-        }
-
-        function captureFieldGPS(fieldId, silent = false) {
-            const input = document.getElementById(`gps-input-${fieldId}`);
-            const accText = document.getElementById(`gps-acc-${fieldId}`);
-            if (!input) return;
-
+        // --- 2. GPS LOCATION ---
+        function captureGPS() {
+            const latEl = document.getElementById('gps-lat');
+            const lngEl = document.getElementById('gps-lng');
+            const accEl = document.getElementById('gps-acc');
+            latEl.innerText = 'جاري الرصد...';
+            
             if (!navigator.geolocation) {
-                if (!silent) showToast(i18n[currentLang].gpsError);
+                showToast('المتصفح لا يدعم تحديد الموقع');
                 return;
             }
-
-            if (accText) accText.textContent = i18n[currentLang].locating;
 
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    const lat = pos.coords.latitude.toFixed(6);
-                    const lng = pos.coords.longitude.toFixed(6);
-                    const acc = Math.round(pos.coords.accuracy);
-                    input.value = `${lat}, ${lng}`;
-                    if (accText) accText.textContent = `± ${acc}m`;
-                    if (!silent) showToast(i18n[currentLang].gpsSuccess);
+                    currentGPS = {
+                        lat: pos.coords.latitude.toFixed(6),
+                        lng: pos.coords.longitude.toFixed(6),
+                        acc: Math.round(pos.coords.accuracy)
+                    };
+                    latEl.innerText = currentGPS.lat;
+                    lngEl.innerText = currentGPS.lng;
+                    accEl.innerText = `${currentGPS.acc} م`;
+                    showToast('تم تحديث الإحداثيات بدقة');
                 },
-                () => {
-                    if (accText) accText.textContent = i18n[currentLang].gpsError;
-                    if (!silent) showToast(i18n[currentLang].gpsError);
+                (err) => {
+                    latEl.innerText = 'تعذر الرصد';
+                    lngEl.innerText = '--.------';
+                    showToast('تأكد من تفعيل خدمة الموقع (GPS) في الجوال');
                 },
-                { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
 
-        function handlePhotoCapture(event, fieldId) {
-            const file = event.target.files[0];
-            if (!file) return;
+        // --- 3. PHOTO CAPTURE & OPTIONAL WATERMARK ---
+        async function handlePhotoUpload(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            
+            if (currentPhotos.length + files.length > 4) {
+                showToast('الحد الأقصى 4 صور لكل سجل');
+                return;
+            }
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    // Resize & compress photo to max 1024px to keep IndexedDB fast & lightweight
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1024;
-                    let width = img.width;
-                    let height = img.height;
+            const applyWatermark = document.getElementById('opt-watermark').checked;
+            const titleText = document.getElementById('f-title').value.trim() || 'رصد ميداني';
+            const nowStr = new Date().toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' });
+            const gpsStr = currentGPS.lat ? `GPS: ${currentGPS.lat}, ${currentGPS.lng}` : 'GPS: غير متوفر';
 
-                    if (width > MAX_WIDTH) {
-                        height *= MAX_WIDTH / width;
-                        width = MAX_WIDTH;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.78);
-                    tempPhotos[fieldId] = compressedDataUrl;
-
-                    const previewBox = document.getElementById(`photo-preview-${fieldId}`);
-                    const previewImg = document.getElementById(`photo-img-${fieldId}`);
-                    previewImg.src = compressedDataUrl;
-                    previewBox.classList.remove('hidden');
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+            for (const file of files) {
+                const processedDataUrl = await processImageCanvas(file, applyWatermark, {
+                    title: titleText,
+                    date: nowStr,
+                    gps: gpsStr
+                });
+                currentPhotos.push(processedDataUrl);
+            }
+            renderPhotoPreviews();
+            event.target.value = '';
         }
 
-        function removeTempPhoto(fieldId) {
-            delete tempPhotos[fieldId];
-            const previewBox = document.getElementById(`photo-preview-${fieldId}`);
-            if (previewBox) previewBox.classList.add('hidden');
-        }
-
-        function resetFormInputs() {
-            document.getElementById('dynamic-field-form').reset();
-            tempPhotos = {};
-            renderDynamicForm();
-        }
-
-        async function handleFormSubmit(e) {
-            e.preventDefault();
-            const formEl = e.target;
-            const formData = new FormData(formEl);
-
-            const recordData = {};
-            let lat = null;
-            let lng = null;
-            let primaryTitle = '';
-
-            formSchema.fields.forEach((field, idx) => {
-                if (field.type === 'photo') {
-                    recordData[field.label] = tempPhotos[field.id] || '';
-                } else {
-                    const val = formData.get(field.id) || '';
-                    recordData[field.label] = val;
-
-                    if (idx === 0 && val) primaryTitle = val;
-
-                    if (field.type === 'gps' && val.includes(',')) {
-                        const parts = val.split(',').map(Number);
-                        if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-                            lat = parts[0];
-                            lng = parts[1];
+        function processImageCanvas(file, addWatermark, meta) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_W = 1280;
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > MAX_W) {
+                            h = Math.round((h * MAX_W) / w);
+                            w = MAX_W;
                         }
-                    }
-                }
-            });
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
 
+                        if (addWatermark) {
+                            const barHeight = Math.max(54, Math.round(h * 0.09));
+                            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+                            ctx.fillRect(0, h - barHeight, w, barHeight);
+
+                            ctx.fillStyle = '#34d399';
+                            ctx.fillRect(w - 8, h - barHeight, 8, barHeight);
+
+                            const fontSize = Math.max(14, Math.round(barHeight * 0.32));
+                            ctx.font = `bold ${fontSize}px Tajawal, sans-serif`;
+                            ctx.fillStyle = '#ffffff';
+                            ctx.textAlign = 'right';
+                            ctx.fillText(`${meta.title} | ${meta.date}`, w - 20, h - barHeight + fontSize + 6);
+
+                            ctx.font = `${Math.round(fontSize * 0.9)}px monospace`;
+                            ctx.fillStyle = '#cbd5e1';
+                            ctx.fillText(meta.gps, w - 20, h - 10);
+                        }
+
+                        resolve(canvas.toDataURL('image/jpeg', 0.82));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderPhotoPreviews() {
+            const grid = document.getElementById('photo-preview-grid');
+            grid.innerHTML = currentPhotos.map((src, idx) => `
+                <div class="relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                    <img src="${src}" class="w-full h-full object-cover">
+                    <button type="button" onclick="removePhoto(${idx})" class="absolute top-1.5 left-1.5 bg-rose-600 text-white rounded-full p-1 shadow">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function removePhoto(idx) {
+            currentPhotos.splice(idx, 1);
+            renderPhotoPreviews();
+        }
+
+        // --- 4. DIGITAL SIGNATURE PAD ---
+        const sigCanvas = document.getElementById('signatureCanvas');
+        const sigCtx = sigCanvas.getContext('2d');
+        let isDrawing = false;
+        let hasSignature = false;
+
+        function resizeSigCanvas() {
+            const rect = sigCanvas.getBoundingClientRect();
+            sigCanvas.width = rect.width || 320;
+            sigCanvas.height = rect.height || 112;
+            sigCtx.strokeStyle = '#0f172a';
+            sigCtx.lineWidth = 2.5;
+            sigCtx.lineCap = 'round';
+        }
+        window.addEventListener('resize', resizeSigCanvas);
+        setTimeout(resizeSigCanvas, 300);
+
+        function getSigPos(e) {
+            const rect = sigCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        sigCanvas.addEventListener('mousedown', (e) => { isDrawing = true; hasSignature = true; document.getElementById('sig-placeholder').classList.add('hidden'); const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+        sigCanvas.addEventListener('mousemove', (e) => { if (!isDrawing) return; const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+        sigCanvas.addEventListener('mouseup', () => isDrawing = false);
+
+        sigCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDrawing = true; hasSignature = true; document.getElementById('sig-placeholder').classList.add('hidden'); const p = getSigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
+        sigCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (!isDrawing) return; const p = getSigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); }, { passive: false });
+        sigCanvas.addEventListener('touchend', () => isDrawing = false);
+
+        function clearSignature() {
+            sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+            hasSignature = false;
+            document.getElementById('sig-placeholder').classList.remove('hidden');
+        }
+
+        // --- 5. FORM SUBMISSION ---
+        document.getElementById('inspectionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
             const record = {
                 id: 'REC-' + Date.now(),
-                formTitle: formSchema.title,
-                title: primaryTitle || ('سجل #' + String(Date.now()).slice(-4)),
-                createdAt: new Date().toISOString(),
-                lat,
-                lng,
-                data: recordData
+                timestamp: Date.now(),
+                dateStr: new Date().toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' }),
+                category: document.getElementById('f-category').value,
+                title: document.getElementById('f-title').value.trim(),
+                status: document.getElementById('f-status').value,
+                inspector: document.getElementById('f-inspector').value.trim(),
+                recipient: document.getElementById('f-recipient').value.trim(),
+                notes: document.getElementById('f-notes').value.trim(),
+                gps: { ...currentGPS },
+                photos: [...currentPhotos],
+                signature: hasSignature ? sigCanvas.toDataURL('image/png') : null
             };
 
-            await dbSaveRecord(record);
-            showToast(i18n[currentLang].toastSaved);
-            resetFormInputs();
-            await refreshAppData();
-        }
+            const tx = db.transaction('records', 'readwrite');
+            tx.objectStore('records').put(record);
+            tx.oncomplete = () => {
+                showToast('تم حفظ السجل الميداني بنجاح');
+                document.getElementById('f-title').value = '';
+                document.getElementById('f-recipient').value = '';
+                document.getElementById('f-notes').value = '';
+                currentPhotos = [];
+                renderPhotoPreviews();
+                clearSignature();
+                loadAllData();
+            };
+        });
 
-        /* ==========================================================================
-           6. RECORDS LIST, SEARCH & DETAILS MODAL
-           ========================================================================== */
-        let cachedRecords = [];
+        // --- 6. RECORDS LIST & SELECTIVE PDF EXPORT ---
+        function renderRecords() {
+            const listEl = document.getElementById('records-list');
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const statusFilter = document.getElementById('filter-status').value;
 
-        async function refreshAppData() {
-            cachedRecords = await dbGetAllRecords();
-            document.getElementById('records-count').textContent = cachedRecords.length;
-            const badge = document.getElementById('nav-badge');
-            if (cachedRecords.length > 0) {
-                badge.textContent = cachedRecords.length;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
-            renderRecordsList();
-            if (leafletMap) updateMapMarkers();
-        }
-
-        function renderRecordsList() {
-            const container = document.getElementById('records-list-container');
-            const query = (document.getElementById('search-records').value || '').toLowerCase();
-            container.innerHTML = '';
-
-            const filtered = cachedRecords.filter(rec => {
-                const content = JSON.stringify(rec.data).toLowerCase() + rec.title.toLowerCase();
-                return content.includes(query);
+            const filtered = allRecords.filter(r => {
+                const matchesQuery = r.title.toLowerCase().includes(query) || r.category.toLowerCase().includes(query) || r.notes.toLowerCase().includes(query);
+                const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
+                return matchesQuery && matchesStatus;
             });
 
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="bg-white rounded-2xl p-8 text-center border border-slate-200 text-slate-400 text-sm">
-                        ${i18n[currentLang].toastEmptyRecords}
-                    </div>`;
+            if (!filtered.length) {
+                listEl.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200 text-xs">لا توجد سجلات مطابقة للبحث حالياً</div>`;
+                updateSelectedCounter();
                 return;
             }
 
-            filtered.forEach(rec => {
-                // Find first image if exists
-                const firstImage = Object.values(rec.data).find(v => typeof v === 'string' && v.startsWith('data:image'));
-                const dateStr = new Date(rec.createdAt).toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-US', {
-                    dateStyle: 'medium', timeStyle: 'short'
-                });
+            listEl.innerHTML = filtered.map(r => {
+                const isChecked = selectedIds.has(r.id) ? 'checked' : '';
+                let badgeColor = 'bg-emerald-100 text-emerald-800';
+                if (r.status.includes('ملاحظة')) badgeColor = 'bg-amber-100 text-amber-800';
+                if (r.status.includes('مخالفة') || r.status.includes('طارئ')) badgeColor = 'bg-rose-100 text-rose-800';
 
-                const card = document.createElement('div');
-                card.onclick = () => openRecordModal(rec.id);
-                card.className = "bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200 flex items-center gap-3 cursor-pointer active:scale-[0.99] transition";
-
-                card.innerHTML = `
-                    ${firstImage 
-                        ? `<img src="${firstImage}" class="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0">`
-                        : `<div class="w-16 h-16 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center shrink-0">
-                            <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                           </div>`
-                    }
-                    <div class="flex-1 min-w-0">
-                        <h3 class="font-bold text-slate-800 text-sm truncate">${rec.title}</h3>
-                        <p class="text-[11px] text-slate-500 mt-0.5">${dateStr}</p>
-                        ${rec.lat && rec.lng 
-                            ? `<span class="inline-block mt-1 text-[10px] font-mono bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md border border-sky-100">
-                                📍 ${rec.lat.toFixed(4)}, ${rec.lng.toFixed(4)}
-                               </span>` 
-                            : ''
-                        }
-                    </div>
-                    <span class="text-slate-400 text-lg">›</span>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function openRecordModal(id) {
-            const rec = cachedRecords.find(r => r.id === id);
-            if (!rec) return;
-
-            const body = document.getElementById('record-modal-body');
-            body.innerHTML = `
-                <div class="bg-slate-100 rounded-xl p-3 text-xs flex justify-between text-slate-600">
-                    <span><strong>ID:</strong> ${rec.id}</span>
-                    <span>${new Date(rec.createdAt).toLocaleString()}</span>
-                </div>
-            `;
-
-            Object.entries(rec.data).forEach(([key, val]) => {
-                if (!val) return;
-                const row = document.createElement('div');
-                row.className = "border-b border-slate-100 pb-2.5";
-
-                if (typeof val === 'string' && val.startsWith('data:image')) {
-                    row.innerHTML = `
-                        <p class="text-xs font-bold text-slate-500 mb-1.5">${key}</p>
-                        <img src="${val}" class="w-full rounded-xl border border-slate-200 shadow-xs">
-                    `;
-                } else {
-                    row.innerHTML = `
-                        <p class="text-xs font-bold text-slate-500">${key}</p>
-                        <p class="text-sm font-semibold text-slate-800 mt-0.5">${val}</p>
-                    `;
-                }
-                body.appendChild(row);
-            });
-
-            document.getElementById('modal-delete-btn').onclick = async () => {
-                await dbDeleteRecord(rec.id);
-                closeRecordModal();
-                showToast(i18n[currentLang].toastDeleted);
-                await refreshAppData();
-            };
-
-            document.getElementById('record-modal').classList.remove('hidden');
-        }
-
-        function closeRecordModal() {
-            document.getElementById('record-modal').classList.add('hidden');
-        }
-
-        async function clearAllRecords() {
-            if (!confirm(i18n[currentLang].confirmDeleteAll)) return;
-            await dbClearAll();
-            showToast(i18n[currentLang].toastDeleted);
-            await refreshAppData();
-        }
-
-        /* ==========================================================================
-           7. INTERACTIVE GIS MAP (LEAFLET.JS)
-           ========================================================================== */
-        let leafletMap = null;
-        let markersLayer = null;
-        let userMarker = null;
-
-        function initMap() {
-            if (leafletMap) {
-                setTimeout(() => leafletMap.invalidateSize(), 150);
-                updateMapMarkers();
-                return;
-            }
-
-            // Default center (Riyadh, Saudi Arabia)
-            leafletMap = L.map('map').setView([24.7136, 46.6753], 6);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(leafletMap);
-
-            markersLayer = L.layerGroup().addTo(leafletMap);
-            updateMapMarkers();
-            locateUserOnMap(true);
-        }
-
-        function updateMapMarkers() {
-            if (!leafletMap || !markersLayer) return;
-            markersLayer.clearLayers();
-
-            const bounds = [];
-
-            cachedRecords.forEach(rec => {
-                if (rec.lat && rec.lng) {
-                    const marker = L.marker([rec.lat, rec.lng]);
-                    const popupHtml = `
-                        <div style="min-width: 150px; text-align: ${currentLang === 'ar' ? 'right' : 'left'};">
-                            <strong style="font-size: 13px; color: #0f172a;">${rec.title}</strong><br>
-                            <span style="font-size: 11px; color: #64748b;">${new Date(rec.createdAt).toLocaleDateString()}</span><br>
-                            <button onclick="openRecordModal('${rec.id}')" 
-                                style="margin-top: 6px; background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; width: 100%;">
-                                ${i18n[currentLang].viewDetails}
-                            </button>
+                return `
+                <div class="bg-white rounded-2xl p-3.5 shadow-sm border ${selectedIds.has(r.id) ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-200'} transition">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" ${isChecked} onchange="toggleRecordSelect('${r.id}', this.checked)" class="mt-1 w-4 h-4 rounded text-blue-600">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}">${r.status}</span>
+                                <span class="text-[10px] text-slate-400">${r.dateStr}</span>
+                            </div>
+                            <h3 class="font-bold text-sm text-slate-800 truncate">${r.title}</h3>
+                            <p class="text-[11px] text-slate-500 mb-1.5">${r.category}</p>
+                            ${r.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg mb-2 line-clamp-2">${r.notes}</p>` : ''}
+                            
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100">
+                                <div class="flex items-center gap-3 text-[11px] text-slate-500">
+                                    <span class="flex items-center gap-1"><i data-lucide="image" class="w-3.5 h-3.5"></i> ${r.photos.length}</span>
+                                    ${r.gps && r.gps.lat ? `<a href="https://maps.google.com/?q=${r.gps.lat},${r.gps.lng}" target="_blank" class="text-blue-600 flex items-center gap-0.5 font-bold"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> خريطة</a>` : ''}
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="printSingleRecord('${r.id}')" class="text-xs text-indigo-600 font-bold hover:underline flex items-center gap-1">
+                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> PDF
+                                    </button>
+                                    <button onclick="deleteRecord('${r.id}')" class="text-xs text-rose-500 hover:text-rose-700 p-1">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    `;
-                    marker.bindPopup(popupHtml);
-                    markersLayer.addLayer(marker);
-                    bounds.push([rec.lat, rec.lng]);
-                }
-            });
+                    </div>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+            updateSelectedCounter();
+        }
 
-            if (bounds.length > 0) {
-                leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+        function toggleRecordSelect(id, checked) {
+            if (checked) selectedIds.add(id);
+            else selectedIds.delete(id);
+            renderRecords();
+        }
+
+        function toggleSelectAll(checkbox) {
+            if (checkbox.checked) {
+                allRecords.forEach(r => selectedIds.add(r.id));
+            } else {
+                selectedIds.clear();
             }
+            renderRecords();
         }
 
-        function locateUserOnMap(silent = false) {
-            if (!navigator.geolocation || !leafletMap) return;
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    if (userMarker) leafletMap.removeLayer(userMarker);
-                    userMarker = L.circleMarker([latitude, longitude], {
-                        radius: 8,
-                        fillColor: "#0284c7",
-                        color: "#ffffff",
-                        weight: 3,
-                        opacity: 1,
-                        fillOpacity: 0.9
-                    }).addTo(leafletMap);
-                    leafletMap.setView([latitude, longitude], 15);
-                },
-                () => {
-                    if (!silent) showToast(i18n[currentLang].gpsError);
-                },
-                { enableHighAccuracy: true }
-            );
+        function updateSelectedCounter() {
+            document.getElementById('selected-count').innerText = `${selectedIds.size} محدد`;
         }
 
-        /* ==========================================================================
-           8. EXPORT (EXCEL UTF-8 BOM CSV) & JSON BACKUP / RESTORE
-           ========================================================================== */
-        function exportCSV() {
-            if (cachedRecords.length === 0) {
-                showToast(i18n[currentLang].toastEmptyRecords);
+        function deleteRecord(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
+            const tx = db.transaction('records', 'readwrite');
+            tx.objectStore('records').delete(id);
+            tx.oncomplete = () => {
+                selectedIds.delete(id);
+                loadAllData();
+                showToast('تم حذف السجل');
+            };
+        }
+
+        function printSingleRecord(id) {
+            const rec = allRecords.find(r => r.id === id);
+            if (rec) generatePDFReport([rec]);
+        }
+
+        function exportSelectedPDF() {
+            if (selectedIds.size === 0) {
+                showToast('يرجى تحديد سجل واحد على الأقل للتصدير');
                 return;
             }
-
-            // Collect all unique keys excluding raw base64 photo strings
-            const allKeys = new Set(['ID', 'Form', 'Created_At', 'Latitude', 'Longitude']);
-            cachedRecords.forEach(rec => {
-                Object.entries(rec.data).forEach(([k, v]) => {
-                    if (!(typeof v === 'string' && v.startsWith('data:image'))) {
-                        allKeys.add(k);
-                    }
-                });
-            });
-
-            const headers = Array.from(allKeys);
-            const rows = [headers.join(',')];
-
-            cachedRecords.forEach(rec => {
-                const row = headers.map(h => {
-                    let val = '';
-                    if (h === 'ID') val = rec.id;
-                    else if (h === 'Form') val = rec.formTitle;
-                    else if (h === 'Created_At') val = rec.createdAt;
-                    else if (h === 'Latitude') val = rec.lat || '';
-                    else if (h === 'Longitude') val = rec.lng || '';
-                    else val = rec.data[h] || '';
-
-                    const escaped = String(val).replace(/"/g, '""');
-                    return `"${escaped}"`;
-                });
-                rows.push(row.join(','));
-            });
-
-            // UTF-8 BOM (\uFEFF) ensures Arabic renders properly in Microsoft Excel
-            const csvContent = "\uFEFF" + rows.join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            downloadBlob(blob, `FieldGIS_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+            const recordsToExport = allRecords.filter(r => selectedIds.has(r.id));
+            generatePDFReport(recordsToExport);
         }
 
-        function exportJSON() {
-            const payload = {
-                exportedAt: new Date().toISOString(),
-                schema: formSchema,
-                records: cachedRecords
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            downloadBlob(blob, `FieldGIS_Backup_${new Date().toISOString().slice(0, 10)}.json`);
+        function generatePDFReport(records) {
+            const printArea = document.getElementById('print-area');
+            const mTop = templateConfig.marginTop;
+            const mBottom = templateConfig.marginBottom;
+            const mRight = templateConfig.marginRight;
+            const mLeft = templateConfig.marginLeft;
+            const bgImg = templateConfig.bgDataUrl;
+
+            printArea.innerHTML = records.map((r, index) => `
+                <div class="print-page" style="padding: ${mTop}mm ${mLeft}mm ${mBottom}mm ${mRight}mm;">
+                    ${bgImg ? `<img src="${bgImg}" style="position:absolute; top:0; left:0; width:210mm; height:297mm; object-fit:fill; z-index:0;">` : ''}
+                    
+                    <div style="position:relative; z-index:1;">
+                        ${templateConfig.headerText ? `<div style="text-align:center; font-weight:bold; font-size:12px; color:#334155; border-bottom:1px solid #cbd5e1; padding-bottom:4px; margin-bottom:10px;">${templateConfig.headerText}</div>` : ''}
+                        
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:#f1f5f9; padding:10px 14px; border-radius:8px; border-right:4px solid #0f172a; margin-bottom:12px;">
+                            <div>
+                                <h1 style="font-size:16px; font-weight:800; color:#0f172a; margin:0;">تقرير فحص وتوثيق ميداني</h1>
+                                <span style="font-size:11px; color:#475569;">رقم المرجع: ${r.id} | التاريخ: ${r.dateStr}</span>
+                            </div>
+                            <div style="background:#0f172a; color:#fff; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:bold;">
+                                ${r.status}
+                            </div>
+                        </div>
+
+                        <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:12px;">
+                            <tr>
+                                <td style="border:1px solid #cbd5e1; padding:7px; background:#f8fafc; font-weight:bold; width:25%;">نوع المهمة</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px; width:75%;" colspan="3">${r.category}</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #cbd5e1; padding:7px; background:#f8fafc; font-weight:bold;">الموقع / المنشأة</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px;" colspan="3">${r.title}</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #cbd5e1; padding:7px; background:#f8fafc; font-weight:bold;">المفتش / المهندس</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px; width:30%;">${r.inspector || '-'}</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px; background:#f8fafc; font-weight:bold; width:20%;">المستلم / المقاول</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px; width:25%;">${r.recipient || '-'}</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #cbd5e1; padding:7px; background:#f8fafc; font-weight:bold;">الإحداثيات (GPS)</td>
+                                <td style="border:1px solid #cbd5e1; padding:7px; font-family:monospace;" colspan="3">
+                                    ${r.gps && r.gps.lat ? `Lat: ${r.gps.lat} , Lng: ${r.gps.lng} (الدقة: ${r.gps.acc}م)` : 'غير مسجلة'}
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="border:1px solid #cbd5e1; border-radius:8px; padding:10px; margin-bottom:12px; background:#ffffff;">
+                            <div style="font-weight:bold; font-size:12px; color:#0f172a; margin-bottom:4px;">الملاحظات الفنية ونتائج الفحص:</div>
+                            <div style="font-size:12px; color:#334155; line-height:1.6; white-space:pre-line;">${r.notes || 'لا توجد ملاحظات إضافية.'}</div>
+                        </div>
+
+                        ${r.photos && r.photos.length ? `
+                        <div style="margin-bottom:12px;">
+                            <div style="font-weight:bold; font-size:12px; color:#0f172a; margin-bottom:6px;">الشواهد المصورة (${r.photos.length}):</div>
+                            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px;">
+                                ${r.photos.map(p => `
+                                    <div style="border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; height:155px;">
+                                        <img src="${p}" style="width:100%; height:100%; object-fit:cover;">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>` : ''}
+
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px; border-top:1px dashed #cbd5e1; padding-top:10px;">
+                            <div style="font-size:11px; color:#475569;">
+                                <b>إعداد وتوثيق:</b> ${r.inspector || 'المفتش الميداني'}<br>
+                                <span>تم التوليد بواسطة نظام FieldGIS Pro</span>
+                            </div>
+                            ${r.signature ? `
+                            <div style="text-align:center;">
+                                <span style="display:block; font-size:10px; font-weight:bold; color:#475569;">التوقيع المعتمد</span>
+                                <img src="${r.signature}" style="height:55px; border-bottom:1px solid #94a3b8;">
+                            </div>` : ''}
+                        </div>
+
+                        ${templateConfig.footerText ? `<div style="text-align:center; font-size:10px; color:#64748b; margin-top:12px;">${templateConfig.footerText}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            showToast('جاري تجهيز التقرير للطباعة أو الحفظ كـ PDF...');
+            setTimeout(() => {
+                window.print();
+            }, 600);
         }
 
-        function importJSON(event) {
+        // --- 7. TEMPLATE BACKGROUND (PDF OR IMAGE) & ALIGNMENT ---
+        async function handleTemplateUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
+            const statusEl = document.getElementById('template-status');
+            statusEl.classList.remove('hidden');
+            statusEl.innerText = 'جاري معالجة القالب وتحويله بدقة عالية...';
+
+            if (file.type === 'application/pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                templateConfig.bgDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                statusEl.innerText = '✅ تم اعتماد الصفحة الأولى من ملف PDF كخلفية رسمية للتقرير';
+            } else {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    templateConfig.bgDataUrl = e.target.result;
+                    statusEl.innerText = '✅ تم اعتماد الصورة كخلفية رسمية للتقرير';
+                    updateMarginUI();
+                };
+                reader.readAsDataURL(file);
+            }
+            updateMarginUI();
+        }
+
+        function removeTemplateBg() {
+            templateConfig.bgDataUrl = null;
+            document.getElementById('template-status').classList.add('hidden');
+            updateMarginUI();
+            saveTemplateSettings();
+            showToast('تمت إزالة خلفية التقرير');
+        }
+
+        function updateMarginUI() {
+            const top = document.getElementById('cfg-margin-top').value;
+            const bottom = document.getElementById('cfg-margin-bottom').value;
+            const right = document.getElementById('cfg-margin-right').value;
+            const left = document.getElementById('cfg-margin-left').value;
+
+            document.getElementById('val-margin-top').innerText = `${top} مم`;
+            document.getElementById('val-margin-bottom').innerText = `${bottom} مم`;
+            document.getElementById('val-margin-right').innerText = `${right} مم`;
+            document.getElementById('val-margin-left').innerText = `${left} مم`;
+
+            // Update visual A4 box (210mm x 297mm)
+            const safeZone = document.getElementById('a4-safe-zone');
+            safeZone.style.top = `${(top / 297) * 100}%`;
+            safeZone.style.bottom = `${(bottom / 297) * 100}%`;
+            safeZone.style.right = `${(right / 210) * 100}%`;
+            safeZone.style.left = `${(left / 210) * 100}%`;
+
+            const previewImg = document.getElementById('a4-preview-img');
+            if (templateConfig.bgDataUrl) {
+                previewImg.src = templateConfig.bgDataUrl;
+                previewImg.classList.remove('hidden');
+            } else {
+                previewImg.classList.add('hidden');
+            }
+        }
+
+        function saveTemplateSettings() {
+            templateConfig.marginTop = parseInt(document.getElementById('cfg-margin-top').value);
+            templateConfig.marginBottom = parseInt(document.getElementById('cfg-margin-bottom').value);
+            templateConfig.marginRight = parseInt(document.getElementById('cfg-margin-right').value);
+            templateConfig.marginLeft = parseInt(document.getElementById('cfg-margin-left').value);
+            templateConfig.headerText = document.getElementById('cfg-header-text').value;
+            templateConfig.footerText = document.getElementById('cfg-footer-text').value;
+
+            const tx = db.transaction('settings', 'readwrite');
+            tx.objectStore('settings').put({ key: 'templateConfig', value: templateConfig });
+            tx.oncomplete = () => showToast('تم حفظ إعدادات القالب والمحاذاة');
+        }
+
+        function applyTemplateSettingsToUI() {
+            document.getElementById('cfg-margin-top').value = templateConfig.marginTop;
+            document.getElementById('cfg-margin-bottom').value = templateConfig.marginBottom;
+            document.getElementById('cfg-margin-right').value = templateConfig.marginRight;
+            document.getElementById('cfg-margin-left').value = templateConfig.marginLeft;
+            document.getElementById('cfg-header-text').value = templateConfig.headerText || '';
+            document.getElementById('cfg-footer-text').value = templateConfig.footerText || '';
+            if (templateConfig.bgDataUrl) {
+                const statusEl = document.getElementById('template-status');
+                statusEl.classList.remove('hidden');
+                statusEl.innerText = '✅ يوجد قالب خلفية محفوظ ومفعّل حالياً';
+            }
+            updateMarginUI();
+        }
+
+        // --- 8. CSV EXPORT & JSON BACKUP ---
+        function exportCSV() {
+            if (!allRecords.length) return showToast('لا توجد سجلات للتصدير');
+            let csv = '﻿رقم السجل,التاريخ,نوع المهمة,الموقع,الحالة,المفتش,المستلم,خط العرض,خط الطول,الملاحظات
+';
+            allRecords.forEach(r => {
+                const row = [
+                    r.id, r.dateStr, r.category, r.title, r.status, r.inspector, r.recipient,
+                    r.gps?.lat || '', r.gps?.lng || '', (r.notes || '').replace(/(
+|
+|)/gm, ' ')
+                ].map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(',');
+                csv += row + '
+';
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `FieldGIS_Export_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        }
+
+        function downloadBackup() {
+            const backup = { version: 1, date: new Date().toISOString(), records: allRecords, templateConfig };
+            const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `FieldGIS_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            link.click();
+        }
+
+        function restoreBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
-            reader.onload = async (e) => {
+            reader.onload = (e) => {
                 try {
-                    const parsed = JSON.parse(e.target.result);
-                    if (parsed.schema && Array.isArray(parsed.schema.fields)) {
-                        formSchema = parsed.schema;
-                        saveSchema();
-                        renderSchemaList();
-                        renderDynamicForm();
-                    }
-                    if (Array.isArray(parsed.records)) {
-                        for (const rec of parsed.records) {
-                            await dbSaveRecord(rec);
+                    const data = JSON.parse(e.target.result);
+                    if (data.records) {
+                        const tx = db.transaction(['records', 'settings'], 'readwrite');
+                        data.records.forEach(r => tx.objectStore('records').put(r));
+                        if (data.templateConfig) {
+                            tx.objectStore('settings').put({ key: 'templateConfig', value: data.templateConfig });
                         }
+                        tx.oncomplete = () => {
+                            loadAllData();
+                            showToast('تمت استعادة النسخة الاحتياطية بنجاح');
+                        };
                     }
-                    await refreshAppData();
-                    showToast("JSON Backup Restored ✓");
                 } catch (err) {
-                    alert("Invalid JSON Backup File");
+                    showToast('ملف النسخة الاحتياطية غير صالح');
                 }
             };
             reader.readAsText(file);
         }
 
-        function downloadBlob(blob, filename) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        // --- 9. MAP & TABS NAVIGATION ---
+        function switchTab(tab) {
+            ['form', 'map', 'records', 'settings'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const navBtn = document.getElementById(`nav-${t}`);
+                navBtn.classList.remove('text-emerald-600', 'font-bold');
+                navBtn.classList.add('text-slate-400');
+            });
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`nav-${tab}`);
+            activeBtn.classList.add('text-emerald-600', 'font-bold');
+            activeBtn.classList.remove('text-slate-400');
+
+            if (tab === 'map') initMap();
         }
 
-        /* ==========================================================================
-           9. BOTTOM NAVIGATION CONTROLLER & APP INITIALIZATION
-           ========================================================================== */
-        function switchTab(tabName) {
-            ['form', 'records', 'map', 'settings'].forEach(t => {
-                document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tabName);
-                document.getElementById(`nav-${t}`).classList.toggle('tab-active', t === tabName);
-            });
+        function initMap() {
+            if (!map) {
+                map = L.map('map').setView([31.3318, 37.3428], 13); // Al-Qurayyat default coordinates
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(map);
+                markersLayer = L.layerGroup().addTo(map);
+            }
+            setTimeout(() => map.invalidateSize(), 200);
+            markersLayer.clearLayers();
 
-            if (tabName === 'map') {
-                initMap();
+            const bounds = [];
+            allRecords.forEach(r => {
+                if (r.gps && r.gps.lat && r.gps.lng) {
+                    const lat = parseFloat(r.gps.lat);
+                    const lng = parseFloat(r.gps.lng);
+                    bounds.push([lat, lng]);
+                    L.marker([lat, lng]).addTo(markersLayer)
+                        .bindPopup(`<b>${r.title}</b><br>${r.status}<br><small>${r.dateStr}</small>`);
+                }
+            });
+            if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+        }
+
+        function centerMapOnUser() {
+            if (currentGPS.lat && map) {
+                map.setView([parseFloat(currentGPS.lat), parseFloat(currentGPS.lng)], 16);
+            } else {
+                captureGPS();
             }
         }
 
-        window.addEventListener('DOMContentLoaded', async () => {
-            applyLanguage();
-            saveSchema();
-            renderDynamicForm();
-            renderSchemaList();
-            await refreshAppData();
+        // Start App
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+            captureGPS();
         });
     </script>
 </body>
